@@ -8,9 +8,15 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:name="com.traffappscorelib.testapp.TestApp"
         android:theme="@style/Theme.TrafficAppsCoreLib">
         <activity
-            android:name=".MainActivity"
+            android:name="com.traffappscorelib.testapp.ExampleActivity"
+            android:exported="false"
+            android:label="@string/title_activity_example"
+            android:theme="@style/Theme.TrafficAppsCoreLib.NoActionBar" />
+        <activity
+            android:name="com.traffappscorelib.testapp.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

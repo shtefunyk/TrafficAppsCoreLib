@@ -1,4 +1,4 @@
-package com.tapps.improvegame
+package com.traffappscorelib.wsc
 
 import org.junit.Test
 

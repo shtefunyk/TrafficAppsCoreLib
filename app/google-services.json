@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "44939704048",
+    "project_id": "traffapptest-ac403",
+    "storage_bucket": "traffapptest-ac403.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:44939704048:android:1bbc958cada8e2db957435",
+        "android_client_info": {
+          "package_name": "com.traffappscorelib.testapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "44939704048-9uktk93jtp0su6p7bs3os18966t93n8k.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBD9j4X-etrOicOM_MFHQ2O5h4uqsUc4PA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "44939704048-9uktk93jtp0su6p7bs3os18966t93n8k.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
