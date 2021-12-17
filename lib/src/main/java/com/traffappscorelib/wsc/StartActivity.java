@@ -239,13 +239,15 @@ public abstract class StartActivity extends AppCompatActivity {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        if (countries.isEmpty()) {
+        if(TextUtils.isEmpty(country)) {
+            return false;
+        }
+        else if (countries.isEmpty()) {
             // Проверка пройдена. Так как в Firebase Remote Config не прописаны страны
             return true;
 
         } else {
-            if (countries.contains(country) && !country.isEmpty()) {
+            if (countries.toUpperCase().contains(country) && !country.isEmpty()) {
                 // Проверка пройдена. Страна SIM-карты содержится в переменной countries
                 return true;
 
