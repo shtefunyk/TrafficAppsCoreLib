@@ -106,6 +106,7 @@ public abstract class StartActivity extends AppCompatActivity {
                 String appsflyer = firebaseRemoteConfig.getString(Constants.FIELD_APPSFLYER);
                 String oneSignal = firebaseRemoteConfig.getString(Constants.FIELD_ONE_SIGNAL);
                 boolean useNaming = firebaseRemoteConfig.getBoolean(Constants.FIELD_USE_NAMING);
+                String namingSeparator = firebaseRemoteConfig.getString(Constants.FIELD_NAMING_SEPARATOR);
                 String countries = firebaseRemoteConfig.getString(Constants.FIELD_COUNTRIES);
 
                 boolean canLoadUrl = isCountryAllowed(countries) && !TextUtils.isEmpty(url);
@@ -117,11 +118,23 @@ public abstract class StartActivity extends AppCompatActivity {
 
                 if(!TextUtils.isEmpty(oneSignal)) initOneSignal(oneSignal);
                 if(!TextUtils.isEmpty(appsflyer)) {
-                    if(useNaming && canLoadUrl) initAppsflyer(appsflyer, new IResultListener() {
-                        @Override public void success(String result) { listener.success(result);}
-                        @Override public void failed() { listener.failed();}
-                    }, url);
-                    else initAppsflyer(appsflyer, null, null);
+                    String savedUrl = prefs.getString(Constants.PREFS_URL, null);
+                    boolean hasSavedUrl = savedUrl != null;
+
+                    if(useNaming && canLoadUrl) {
+                        if(hasSavedUrl) {
+                            listener.success(savedUrl);
+                            initAppsflyer(appsflyer, namingSeparator, null, null);
+                        }
+                        else initAppsflyer(appsflyer, namingSeparator, new IResultListener() {
+                            @Override public void success(String result) {
+                                prefs.edit().putString(Constants.PREFS_URL, result).apply();
+                                listener.success(result);
+                            }
+                            @Override public void failed() { listener.failed();}
+                        }, url);
+                    }
+                    else initAppsflyer(appsflyer, namingSeparator, null, null);
                 }
             }
             else listener.failed();
@@ -264,11 +277,11 @@ public abstract class StartActivity extends AppCompatActivity {
         OneSignal.setAppId(id);
     }
 
-    private void initAppsflyer(String id, IResultListener listener, String url) {
+    private void initAppsflyer(String id, String namingSeparator, IResultListener listener, String url) {
         AppsFlyerLib.getInstance().init(id, new AppsFlyerConversionListener() {
             @Override
             public void onConversionDataSuccess(Map<String, Object> map) {
-                if(listener != null) AppsflyerUtil.Companion.parse(map, listener, url);
+                if(listener != null) AppsflyerUtil.Companion.parse(namingSeparator, map, listener, url);
             }
 
             @Override

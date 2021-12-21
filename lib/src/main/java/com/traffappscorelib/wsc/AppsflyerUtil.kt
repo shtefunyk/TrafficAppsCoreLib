@@ -1,38 +1,43 @@
 package com.traffappscorelib.wsc
 
+import android.text.TextUtils
+
 class AppsflyerUtil {
 
     companion object {
-        fun parse(conversionData: Map<String, Any>, listener: IResultListener, url: String) {
-
-            val fieldSub1 = "{sub_1}"
-            val fieldSub2 = "{sub_2}"
-            val fieldSub3 = "{sub_3}"
-            val fieldSub4 = "{sub_4}"
-            val fieldSub5 = "{sub_5}"
+        fun parse(namingSeparator: String, conversionData: Map<String, Any>, listener: IResultListener, url: String) {
 
             val naming = conversionData["c"]
-            val namingParams: List<String> = naming.toString().split("_")
+            val namingParams: List<String> = naming.toString()
+                .split(if(TextUtils.isEmpty(namingSeparator)) Constants.DEFAULT_NAMING_SEPARATOR else namingSeparator)
 
-            if(namingParams.size > 3) {
-                val sub1 = if(namingParams.size > 3) namingParams[3] else ""
-                val sub2 = if(namingParams.size > 4) namingParams[4] else ""
-                val sub3 = if(namingParams.size > 5) namingParams[5] else ""
-                val sub4 = if(namingParams.size > 6) namingParams[6] else ""
-                val sub5 = if(namingParams.size > 7) namingParams[7] else ""
+            var resultUrl = url
 
-                val result = url
-                    .replace(fieldSub1, sub1)
-                    .replace(fieldSub2, sub2)
-                    .replace(fieldSub3, sub3)
-                    .replace(fieldSub4, sub4)
-                    .replace(fieldSub5, sub5)
+            if(namingParams.size > 1) {
 
-                listener.success(result)
+                val hasStreamKey = isStreamKey(namingParams[1])
+                if(hasStreamKey) resultUrl = if(url.endsWith("/")) resultUrl + namingParams[1] else resultUrl + "/" + namingParams[1]
+                else resultUrl = addUrlParam(resultUrl, namingParams[1].replaceFirst(":", "="))
+
+                if(namingParams.size > 2)
+                    for (i in 2 until namingParams.size) {
+                        resultUrl = addUrlParam(resultUrl, namingParams[i].replaceFirst(":", "="))
+                    }
+
+                listener.success(resultUrl)
             }
             else {
                 listener.failed()
             }
+        }
+
+        private fun isStreamKey(param: String) = !param.contains(":")
+
+        private fun addUrlParam(url: String, paramValue: String): String {
+            return if(url.contains("?")) {
+                "$url&$paramValue"
+            }
+            else "$url?$paramValue"
         }
     }
 }
