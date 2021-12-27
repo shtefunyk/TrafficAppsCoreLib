@@ -10,4 +10,8 @@ class MainActivity : StartActivity() {
     override fun getLoadingViewLayoutRes(): Int {
         return R.layout.loadingg;
     }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+    }
 }

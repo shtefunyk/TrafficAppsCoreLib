@@ -1,14 +1,20 @@
 package com.traffappscorelib.wsc;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.telephony.TelephonyManager;
 import android.text.TextUtils;
+import android.util.Base64;
+import android.util.Log;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.WebChromeClient;
@@ -19,9 +25,13 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import com.appsflyer.AppsFlyerConversionListener;
 import com.appsflyer.AppsFlyerLib;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.onesignal.OneSignal;
+
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import im.delight.android.webview.AdvancedWebView;
 
@@ -127,9 +137,18 @@ public abstract class StartActivity extends AppCompatActivity {
                             initAppsflyer(appsflyer, namingSeparator, null, null);
                         }
                         else initAppsflyer(appsflyer, namingSeparator, new IResultListener() {
+                            @SuppressLint("MissingPermission")
                             @Override public void success(String result) {
                                 prefs.edit().putString(Constants.PREFS_URL, result).apply();
                                 listener.success(result);
+                                try {
+                                    Bundle bundle = new Bundle();
+                                    bundle.putString("url", result);
+                                    FirebaseAnalytics.getInstance(getApplicationContext()).logEvent("first_load_url", bundle);
+                                }
+                                catch (Exception e) {
+                                    e.printStackTrace();
+                                }
                             }
                             @Override public void failed() { listener.failed();}
                         }, url);
@@ -300,6 +319,22 @@ public abstract class StartActivity extends AppCompatActivity {
             }
         }, this);
         AppsFlyerLib.getInstance().start(this);
+    }
+
+    public void printHashKey() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_SIGNATURES);
+            for (Signature signature : info.signatures) {
+                MessageDigest md = MessageDigest.getInstance("SHA");
+                md.update(signature.toByteArray());
+                String hashKey = new String(Base64.encode(md.digest(), 0));
+                Log.i("TAG", "printHashKey() Hash Key: " + hashKey);
+            }
+        } catch (NoSuchAlgorithmException e) {
+            Log.e("TAG", "printHashKey()", e);
+        } catch (Exception e) {
+            Log.e("TAG", "printHashKey()", e);
+        }
     }
 
 }
