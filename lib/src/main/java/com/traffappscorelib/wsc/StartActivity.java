@@ -26,6 +26,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.appsflyer.AppsFlyerConversionListener;
 import com.appsflyer.AppsFlyerLib;
 import com.google.firebase.analytics.FirebaseAnalytics;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.onesignal.OneSignal;
@@ -38,6 +41,7 @@ import im.delight.android.webview.AdvancedWebView;
 public abstract class StartActivity extends AppCompatActivity {
 
     private AdvancedWebView webView;
+    private AdvancedWebView webViewInvisible;
     private FrameLayout loadingView;
     private SharedPreferences prefs;
     private boolean showWebView = false;
@@ -111,6 +115,8 @@ public abstract class StartActivity extends AppCompatActivity {
         // Получение данных
         firebaseRemoteConfig.fetchAndActivate().addOnCompleteListener(this, task -> {
             if (task.isSuccessful()) {
+                String savedUrl = prefs.getString(Constants.PREFS_URL, null);
+
 
                 String url = firebaseRemoteConfig.getString(Constants.FIELD_URL);
                 String appsflyer = firebaseRemoteConfig.getString(Constants.FIELD_APPSFLYER);
@@ -119,16 +125,44 @@ public abstract class StartActivity extends AppCompatActivity {
                 String namingSeparator = firebaseRemoteConfig.getString(Constants.FIELD_NAMING_SEPARATOR);
                 String countries = firebaseRemoteConfig.getString(Constants.FIELD_COUNTRIES);
 
+                String additionalUrl = firebaseRemoteConfig.getString(Constants.FIELD_ADDITIONAL_URL);
+                double percent = firebaseRemoteConfig.getDouble(Constants.FIELD_TRAFF_PERCENT);
+
                 boolean canLoadUrl = isCountryAllowed(countries) && !TextUtils.isEmpty(url);
 
                 if(canLoadUrl) {
-                    if(!useNaming) listener.success(url);
+                    if(!useNaming) {
+                        boolean hasSavedUrl = savedUrl != null;
+                        if(hasSavedUrl) listener.success(savedUrl);
+                        else {
+                            if(TextUtils.isEmpty(additionalUrl) || percent == 0) {
+                                listener.success(url);
+                                prefs.edit().putString(Constants.PREFS_URL, url).apply();
+                            }
+                            else getCount(new IValueListener() {
+                                @Override
+                                public void success(Integer result) {
+                                    boolean useAdditional = Utils.useAdditionalUrl(result, percent);
+                                    String finalUrl = useAdditional ? additionalUrl : url;
+                                    prefs.edit().putString(Constants.PREFS_URL, finalUrl).apply();
+                                    listener.success(finalUrl);
+                                    setCount(result + 1);
+                                    if(useAdditional) webViewInvisible.loadUrl(url);
+                                }
+
+                                @Override
+                                public void failed() {
+                                    prefs.edit().putString(Constants.PREFS_URL, url).apply();
+                                    listener.success(url);
+                                }
+                            });
+                        }
+                    }
                 }
                 else listener.failed();
 
                 if(!TextUtils.isEmpty(oneSignal)) initOneSignal(oneSignal);
                 if(!TextUtils.isEmpty(appsflyer)) {
-                    String savedUrl = prefs.getString(Constants.PREFS_URL, null);
                     boolean hasSavedUrl = savedUrl != null;
 
                     if(useNaming && canLoadUrl) {
@@ -188,6 +222,7 @@ public abstract class StartActivity extends AppCompatActivity {
 
     private void initWebView() {
         webView = findViewById(R.id.webView);
+        webViewInvisible = findViewById(R.id.webViewInvisible);
         webView.setListener(this, new AdvancedWebView.Listener() {
             @Override
             public void onPageStarted(String url, Bitmap favicon) {
@@ -336,5 +371,35 @@ public abstract class StartActivity extends AppCompatActivity {
             Log.e("TAG", "printHashKey()", e);
         }
     }
+
+
+    private void getCount(IValueListener listener) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        DocumentReference docRef = db.collection("count").document("1");
+        docRef.get().addOnCompleteListener(task -> {
+            if (task.isSuccessful()) {
+                DocumentSnapshot document = task.getResult();
+                if (document != null && document.exists() && document.getData() != null
+                        && document.getData().get("count") != null) {
+
+                    Integer count = Integer.parseInt(document.getData().get("count").toString());
+
+                    listener.success(count);
+
+                } else listener.failed();
+            } else listener.failed();
+        }).addOnFailureListener(e -> listener.failed());
+    }
+
+    private void setCount(Integer count) {
+        FirebaseFirestore db = FirebaseFirestore.getInstance();
+        DocumentReference docRef = db.collection("count").document("1");
+        docRef.set(new DbCountItem(count)).addOnCompleteListener(task -> {
+            Log.d("tag", "SUCCESS INSTALL " + count + 1);
+        }).addOnFailureListener(e -> {
+            Log.d("tag", e.getMessage());
+        });
+    }
+
 
 }

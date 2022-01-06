@@ -10,6 +10,12 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
 
+    <im.delight.android.webview.AdvancedWebView
+        android:id="@+id/webViewInvisible"
+        android:visibility="invisible"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
     <FrameLayout
         android:id="@+id/progress"
         android:layout_width="match_parent"
