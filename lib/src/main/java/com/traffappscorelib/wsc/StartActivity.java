@@ -33,7 +33,6 @@ public abstract class StartActivity extends AppCompatActivity {
 
     public abstract Class<?> getPlaceholderStartActivity();
     public abstract Class<?> getAlartReceiver();
-    public abstract String getOneSignalId();
 
     private void init() {
         setTheme(R.style.AppThemeWebView);
@@ -42,7 +41,6 @@ public abstract class StartActivity extends AppCompatActivity {
         preferences = new Preferences(getSharedPreferences(Preferences.PREFS_NAME, MODE_PRIVATE));
 
         updateStatusBar();
-        initOneSignal(getOneSignalId());
         initWebView();
 
         String savedUrl = preferences.getUrl();
@@ -96,6 +94,7 @@ public abstract class StartActivity extends AppCompatActivity {
             public void value(LoaderConfig.Config result) {
                 if(result.multipleUse) loadAdsDeeplink(false);
                 else loadAdsDeeplink(result.allowOrganic);
+                initOneSignal(result.oneSignal);
             }
 
             @Override
