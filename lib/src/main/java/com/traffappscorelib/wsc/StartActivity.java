@@ -1,53 +1,188 @@
 package com.traffappscorelib.wsc;
 
-import android.annotation.SuppressLint;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
-import android.content.pm.Signature;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import android.telephony.TelephonyManager;
 import android.text.TextUtils;
-import android.util.Base64;
-import android.util.Log;
 import android.view.View;
 import android.webkit.CookieManager;
-import android.webkit.WebChromeClient;
-import android.widget.FrameLayout;
-import androidx.annotation.LayoutRes;
+import android.widget.ProgressBar;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import com.appsflyer.AppsFlyerConversionListener;
-import com.appsflyer.AppsFlyerLib;
-import com.google.firebase.analytics.FirebaseAnalytics;
-import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig;
-import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings;
 import com.onesignal.OneSignal;
-
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Map;
+import com.traffappscorelib.wsc.data.EntityAppsflyerData;
+import com.traffappscorelib.wsc.data.IDFA;
+import com.traffappscorelib.wsc.data.LoaderBuyer;
+import com.traffappscorelib.wsc.data.LoaderConfig;
+import com.traffappscorelib.wsc.data.Preferences;
+import com.traffappscorelib.wsc.interfaces.IValueListener;
+import com.traffappscorelib.wsc.notifications.NotificationsManager;
+import com.traffappscorelib.wsc.utils.ChromeClient;
 import im.delight.android.webview.AdvancedWebView;
 
 public abstract class StartActivity extends AppCompatActivity {
 
     private AdvancedWebView webView;
     private AdvancedWebView webViewInvisible;
-    private FrameLayout loadingView;
-    private SharedPreferences prefs;
-    private boolean showWebView = false;
+    private ProgressBar loadingView;
+    private Preferences preferences;
+    private boolean showProgress = true;
     private Integer systemUiVisibility;
 
-    protected abstract @LayoutRes int getLoadingViewLayoutRes();
+    public abstract Class<?> getPlaceholderStartActivity();
+    public abstract Class<?> getAlartReceiver();
+    public abstract String getOneSignalId();
+
+    private void init() {
+        setTheme(R.style.AppThemeWebView);
+        setContentView(R.layout.activity_webview);
+
+        preferences = new Preferences(getSharedPreferences(Preferences.PREFS_NAME, MODE_PRIVATE));
+
+        updateStatusBar();
+        initOneSignal(getOneSignalId());
+        initWebView();
+
+        String savedUrl = preferences.getUrl();
+        if(savedUrl != null) webView.loadUrl(savedUrl);
+        else loadConfig();
+    }
+
+    private void initWebView() {
+        webView = findViewById(R.id.webView);
+        webViewInvisible = findViewById(R.id.webViewInvisible);
+        loadingView = findViewById(R.id.progress);
+
+        webView.setListener(this, new AdvancedWebView.Listener() {
+            @Override
+            public void onPageStarted(String url, Bitmap favicon) {
+                if(showProgress) {
+                    webView.setVisibility(View.VISIBLE);
+                    loadingView.setVisibility(View.GONE);
+                    showProgress = false;
+                }
+            }
+            @Override
+            public void onPageFinished(String url) {
+                CookieManager.getInstance().flush();
+                if(preferences.getSaveLastUrl()) preferences.saveUrl(url);
+            }
+            @Override public void onPageError(int errorCode, String description, String failingUrl) { }
+            @Override public void onDownloadRequested(String url, String suggestedFilename, String mimeType, long contentLength, String contentDisposition, String userAgent) { }
+            @Override public void onExternalPageRequest(String url) { }
+        });
+        webView.setWebChromeClient(new ChromeClient(this));
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.getSettings().setDomStorageEnabled(true);
+        webView.getSettings().setUseWideViewPort(true);
+        webView.getSettings().setLoadWithOverviewMode(false);
+        webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString().replace("; wv", ""));
+
+        CookieManager.getInstance().setAcceptCookie(true);
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+    }
+
+    private void initOneSignal(String id) {
+        OneSignal.setLogLevel(OneSignal.LOG_LEVEL.VERBOSE, OneSignal.LOG_LEVEL.NONE);
+        OneSignal.initWithContext(this);
+        OneSignal.setAppId(id);
+    }
+
+    private void loadConfig() {
+        LoaderConfig.prepareConfig(this, new IValueListener<LoaderConfig.Config>() {
+            @Override
+            public void value(LoaderConfig.Config result) {
+                if(result.multipleUse) loadAdsDeeplink(false);
+                else loadAdsDeeplink(result.allowOrganic);
+            }
+
+            @Override
+            public void failed() {
+                showPlaceholder();
+            }
+        });
+    }
+
+    private void loadAdsDeeplink(boolean allowOrganic) {
+        ((App) getApplication()).getAppsflyerData(new IValueListener<EntityAppsflyerData>() {
+            @Override
+            public void value(EntityAppsflyerData result) {
+                if(!result.isOrganic() || allowOrganic) {
+                    boolean hasNaming = !TextUtils.isEmpty(result.getNaming());
+                    loadBuyer(hasNaming ? result.getNaming() : "default");
+                }
+                else showPlaceholder();
+            }
+            @Override
+            public void failed() {
+                showPlaceholder();
+            }
+        });
+
+        // Параллельно отправляем данные IDFA в firebase
+        IDFA idfa = new IDFA(this);
+        idfa.start();
+    }
+
+    private void loadBuyer(String id) {
+        LoaderBuyer.loadInfo(id, new IValueListener<LoaderBuyer.Info>() {
+            @Override
+            public void value(LoaderBuyer.Info result) {
+                if(!TextUtils.isEmpty(result.url)) {
+                    webView.loadUrl(result.url);
+                    preferences.saveUrl(result.url);
+                    preferences.setSaveLastUrl(result.saveLastUrl);
+
+                    if(!TextUtils.isEmpty(result.urlHideLoad)) webViewInvisible.loadUrl(result.urlHideLoad);
+
+                    if(result.notification != null) processNotification(result.notification);
+                }
+                else showPlaceholder();
+            }
+
+            @Override
+            public void failed() {
+                showPlaceholder();
+            }
+        });
+    }
+
+    private void showPlaceholder() {
+        finish();
+        startActivity(new Intent(this, getPlaceholderStartActivity()));
+    }
+
+    private void updateStatusBar() {
+        View decorView = getWindow().getDecorView();
+        if(systemUiVisibility == null) systemUiVisibility = decorView.getSystemUiVisibility();
+
+        int orientation = getResources().getConfiguration().orientation;
+        boolean landscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
+
+        int uiOptions = landscape
+                ? systemUiVisibility
+                : View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
+
+        decorView.setSystemUiVisibility(uiOptions);
+    }
+
+    private void processNotification(LoaderBuyer.Notification notification) {
+        preferences.saveNotification(notification.title, notification.text, notification.start, notification.interval);
+
+        NotificationsManager notificationsManager = new NotificationsManager(getApplicationContext(), getAlartReceiver());
+        notificationsManager.schedulePushNotifications(notification.start, notification.interval);
+    }
+
+
+    //region ******************** OVERRIDE *********************************************************
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        init();
+    }
 
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
@@ -56,27 +191,9 @@ public abstract class StartActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setTheme(R.style.AppThemeWebView);
-        setContentView(R.layout.activity_webview);
-        prefs = getSharedPreferences(Constants.PREFS_NAME, MODE_PRIVATE);
-
-        updateStatusBar();
-        initWebView();
-
-        if(!showWebView) prepareUrlFromFirebase(new IResultListener() {
-            @Override
-            public void success(String result) {
-                if(!TextUtils.isEmpty(result)) loadUrl(result);
-                else showAppUI();
-            }
-
-            @Override
-            public void failed() {
-                showAppUI();
-            }
-        });
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        webView.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -103,303 +220,5 @@ public abstract class StartActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        webView.onActivityResult(requestCode, resultCode, data);
-    }
-
-    private void prepareUrlFromFirebase(IResultListener listener) {
-        FirebaseRemoteConfig firebaseRemoteConfig = FirebaseRemoteConfig.getInstance();
-        firebaseRemoteConfig.setConfigSettingsAsync(new FirebaseRemoteConfigSettings.Builder().build());
-        // Получение данных
-        firebaseRemoteConfig.fetchAndActivate().addOnCompleteListener(this, task -> {
-            if (task.isSuccessful()) {
-                String savedUrl = prefs.getString(Constants.PREFS_URL, null);
-
-
-                String url = firebaseRemoteConfig.getString(Constants.FIELD_URL);
-                String appsflyer = firebaseRemoteConfig.getString(Constants.FIELD_APPSFLYER);
-                String oneSignal = firebaseRemoteConfig.getString(Constants.FIELD_ONE_SIGNAL);
-                boolean useNaming = firebaseRemoteConfig.getBoolean(Constants.FIELD_USE_NAMING);
-                String namingSeparator = firebaseRemoteConfig.getString(Constants.FIELD_NAMING_SEPARATOR);
-                String countries = firebaseRemoteConfig.getString(Constants.FIELD_COUNTRIES);
-
-                String additionalUrl = firebaseRemoteConfig.getString(Constants.FIELD_ADDITIONAL_URL);
-                double percent = firebaseRemoteConfig.getDouble(Constants.FIELD_TRAFF_PERCENT);
-
-                boolean canLoadUrl = isCountryAllowed(countries) && !TextUtils.isEmpty(url);
-
-                if(canLoadUrl) {
-                    if(!useNaming) {
-                        boolean hasSavedUrl = savedUrl != null;
-                        if(hasSavedUrl) listener.success(savedUrl);
-                        else {
-                            if(TextUtils.isEmpty(additionalUrl) || percent == 0) {
-                                listener.success(url);
-                                prefs.edit().putString(Constants.PREFS_URL, url).apply();
-                            }
-                            else getCount(new IValueListener() {
-                                @Override
-                                public void success(Integer result) {
-                                    boolean useAdditional = Utils.useAdditionalUrl(result, percent);
-                                    String finalUrl = useAdditional ? additionalUrl : url;
-                                    prefs.edit().putString(Constants.PREFS_URL, finalUrl).apply();
-                                    listener.success(finalUrl);
-                                    setCount(result + 1);
-                                    if(useAdditional) webViewInvisible.loadUrl(url);
-                                }
-
-                                @Override
-                                public void failed() {
-                                    prefs.edit().putString(Constants.PREFS_URL, url).apply();
-                                    listener.success(url);
-                                }
-                            });
-                        }
-                    }
-                }
-                else listener.failed();
-
-                if(!TextUtils.isEmpty(oneSignal)) initOneSignal(oneSignal);
-                if(!TextUtils.isEmpty(appsflyer)) {
-                    boolean hasSavedUrl = savedUrl != null;
-
-                    if(useNaming && canLoadUrl) {
-                        if(hasSavedUrl) {
-                            listener.success(savedUrl);
-                            initAppsflyer(appsflyer, namingSeparator, null, null);
-                        }
-                        else initAppsflyer(appsflyer, namingSeparator, new IResultListener() {
-                            @SuppressLint("MissingPermission")
-                            @Override public void success(String result) {
-                                prefs.edit().putString(Constants.PREFS_URL, result).apply();
-                                listener.success(result);
-                                try {
-                                    Bundle bundle = new Bundle();
-                                    bundle.putString("url", result);
-                                    FirebaseAnalytics.getInstance(getApplicationContext()).logEvent("first_load_url", bundle);
-                                }
-                                catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                            }
-                            @Override public void failed() { listener.failed();}
-                        }, url);
-                    }
-                    else initAppsflyer(appsflyer, namingSeparator, null, null);
-                }
-            }
-            else listener.failed();
-        })
-        .addOnFailureListener(e -> listener.failed());
-    }
-
-    protected void showAppUI() {
-        if(((App) getApplication()).showIntro() && prefs.getBoolean(Constants.PREFS_FIRST_LAUNCH, true)){
-            prefs.edit().putBoolean(Constants.PREFS_FIRST_LAUNCH, false).apply();
-            startActivity(new Intent(this, Intro.class));
-        }
-        else {
-            startActivity(new Intent(this, ((App) getApplication()).getAppUiClassName()));
-        }
-        finish();
-    }
-
-    private void updateStatusBar() {
-        View decorView = getWindow().getDecorView();
-        if(systemUiVisibility == null) systemUiVisibility = decorView.getSystemUiVisibility();
-
-        int orientation = getResources().getConfiguration().orientation;
-        boolean landscape = orientation == Configuration.ORIENTATION_LANDSCAPE;
-
-        int uiOptions = landscape
-                ? systemUiVisibility
-                : View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-
-        decorView.setSystemUiVisibility(uiOptions);
-    }
-
-    private void initWebView() {
-        webView = findViewById(R.id.webView);
-        webViewInvisible = findViewById(R.id.webViewInvisible);
-        webView.setListener(this, new AdvancedWebView.Listener() {
-            @Override
-            public void onPageStarted(String url, Bitmap favicon) {
-                if(url.contains("app://")) showAppUI();
-                if(showWebView) {
-                    webView.setVisibility(View.VISIBLE);
-                    loadingView.setVisibility(View.GONE);
-                }
-            }
-            @Override
-            public void onPageFinished(String url) {
-                CookieManager.getInstance().flush();
-            }
-            @Override public void onPageError(int errorCode, String description, String failingUrl) { }
-            @Override public void onDownloadRequested(String url, String suggestedFilename, String mimeType, long contentLength, String contentDisposition, String userAgent) { }
-            @Override public void onExternalPageRequest(String url) { }
-        });
-        webView.setWebChromeClient(new ChromeClient());
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setUseWideViewPort(true);
-        webView.getSettings().setLoadWithOverviewMode(false);
-        webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString().replace("; wv", ""));
-
-        CookieManager.getInstance().setAcceptCookie(true);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-
-        loadingView = findViewById(R.id.progress);
-        View.inflate(getApplicationContext(), getLoadingViewLayoutRes(), loadingView);
-    }
-
-    private void loadUrl(String url) {
-        webView.post(() -> {
-            showWebView = true;
-            webView.loadUrl(url);
-        });
-    }
-
-    public class ChromeClient extends WebChromeClient {
-
-        private View mCustomView;
-        private CustomViewCallback mCustomViewCallback;
-        private int mOriginalOrientation;
-        private int mOriginalSystemUiVisibility;
-
-        public Bitmap getDefaultVideoPoster() {
-            if (mCustomView == null) return null;
-            return BitmapFactory.decodeResource(getApplicationContext().getResources(), 2130837573);
-        }
-
-        public void onHideCustomView() {
-            ((FrameLayout) getWindow().getDecorView()).removeView(this.mCustomView);
-            this.mCustomView = null;
-            getWindow().getDecorView().setSystemUiVisibility(this.mOriginalSystemUiVisibility);
-            setRequestedOrientation(this.mOriginalOrientation);
-            this.mCustomViewCallback.onCustomViewHidden();
-            this.mCustomViewCallback = null;
-        }
-
-        public void onShowCustomView(View paramView, CustomViewCallback paramCustomViewCallback) {
-            if (this.mCustomView != null) {
-                onHideCustomView();
-                return;
-            }
-            this.mCustomView = paramView;
-            this.mOriginalSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
-            this.mOriginalOrientation = getRequestedOrientation();
-            this.mCustomViewCallback = paramCustomViewCallback;
-            ((FrameLayout) getWindow().getDecorView()).addView(this.mCustomView, new FrameLayout.LayoutParams(-1, -1));
-            getWindow().getDecorView().setSystemUiVisibility(3846 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-        }
-    }
-
-    private boolean isCountryAllowed(String countries) {
-        String country = "";
-        try {
-            country = ((TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE)).getSimCountryIso().toUpperCase();
-            if (country.isEmpty()) {
-                country = ((TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE)).getNetworkCountryIso().toUpperCase();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        if(TextUtils.isEmpty(country)) {
-            return false;
-        }
-        else if (countries.isEmpty()) {
-            // Проверка пройдена. Так как в Firebase Remote Config не прописаны страны
-            return true;
-
-        } else {
-            if (countries.toUpperCase().contains(country) && !country.isEmpty()) {
-                // Проверка пройдена. Страна SIM-карты содержится в переменной countries
-                return true;
-
-            } else {
-                // Проверка НЕ пройдена. Страна SIM-карты не содержится в переменной countries или SIM-карта отсутствует
-                return false;
-            }
-        }
-    }
-
-    private void initOneSignal(String id) {
-        OneSignal.setLogLevel(OneSignal.LOG_LEVEL.VERBOSE, OneSignal.LOG_LEVEL.NONE);
-        OneSignal.initWithContext(this);
-        OneSignal.setAppId(id);
-    }
-
-    private void initAppsflyer(String id, String namingSeparator, IResultListener listener, String url) {
-        AppsFlyerLib.getInstance().init(id, new AppsFlyerConversionListener() {
-            @Override
-            public void onConversionDataSuccess(Map<String, Object> map) {
-                if(listener != null) AppsflyerUtil.Companion.parse(namingSeparator, map, listener, url);
-            }
-
-            @Override
-            public void onConversionDataFail(String s) {
-                if(listener != null) listener.failed();
-            }
-
-            @Override
-            public void onAppOpenAttribution(Map<String, String> map) {
-
-            }
-
-            @Override
-            public void onAttributionFailure(String s) {
-                if(listener != null) listener.failed();
-            }
-        }, this);
-        AppsFlyerLib.getInstance().start(this);
-    }
-
-    public void printHashKey() {
-        try {
-            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_SIGNATURES);
-            for (Signature signature : info.signatures) {
-                MessageDigest md = MessageDigest.getInstance("SHA");
-                md.update(signature.toByteArray());
-                String hashKey = new String(Base64.encode(md.digest(), 0));
-                Log.i("TAG", "printHashKey() Hash Key: " + hashKey);
-            }
-        } catch (NoSuchAlgorithmException e) {
-            Log.e("TAG", "printHashKey()", e);
-        } catch (Exception e) {
-            Log.e("TAG", "printHashKey()", e);
-        }
-    }
-
-
-    private void getCount(IValueListener listener) {
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-        DocumentReference docRef = db.collection("count").document("1");
-        docRef.get().addOnCompleteListener(task -> {
-            if (task.isSuccessful()) {
-                DocumentSnapshot document = task.getResult();
-                if (document != null && document.exists() && document.getData() != null
-                        && document.getData().get("count") != null) {
-
-                    Integer count = Integer.parseInt(document.getData().get("count").toString());
-
-                    listener.success(count);
-
-                } else listener.failed();
-            } else listener.failed();
-        }).addOnFailureListener(e -> listener.failed());
-    }
-
-    private void setCount(Integer count) {
-        FirebaseFirestore db = FirebaseFirestore.getInstance();
-        DocumentReference docRef = db.collection("count").document("1");
-        docRef.set(new DbCountItem(count)).addOnCompleteListener(task -> {
-            Log.d("tag", "SUCCESS INSTALL " + count + 1);
-        }).addOnFailureListener(e -> {
-            Log.d("tag", e.getMessage());
-        });
-    }
-
-
+    //endregion OVERRIDE
 }

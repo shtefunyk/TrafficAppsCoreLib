@@ -7,11 +7,10 @@ import com.traffappscorelib.wsc.StartActivity
 
 class MainActivity : StartActivity() {
 
-    override fun getLoadingViewLayoutRes(): Int {
-        return R.layout.loadingg;
-    }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-    }
+    override fun getPlaceholderStartActivity(): Class<*> = ExampleActivity::class.java
+
+    override fun getOneSignalId() = "782601dd-4e22-473f-a2e5-7669a5bec132"
+
+    override fun getAlartReceiver() = AlartReceiver::class.java
 }

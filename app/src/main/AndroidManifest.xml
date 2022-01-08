@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM"/>
 
     <application
         android:allowBackup="true"
@@ -15,6 +16,16 @@
         android:usesCleartextTraffic="true"
         android:name="com.traffappscorelib.testapp.TestApp"
         android:theme="@style/Theme.TrafficAppsCoreLib">
+
+        <receiver
+            android:name="com.appsflyer.SingleInstallBroadcastReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="com.android.vending.INSTALL_REFERRER" />
+        </intent-filter>
+    </receiver>
+        <receiver android:name="com.traffappscorelib.testapp.AlartReceiver" android:enabled="true" android:exported="true"/>
+
         <meta-data android:name="com.facebook.sdk.ApplicationId" android:value="@string/facebook_app_id"/>
         <activity
             android:name="com.traffappscorelib.testapp.ExampleActivity"
