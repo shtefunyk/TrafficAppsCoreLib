@@ -1,18 +1,13 @@
 package com.traffappscorelib.wsc.data;
 
 import com.google.firebase.firestore.FirebaseFirestore;
-
-import java.io.Serializable;
+import java.util.HashMap;
 
 public class Analytics {
 
-    public static class Data implements Serializable {
-        public String url;
-    }
-
     public static void sendAppsflyerData(String url) {
-        Data data = new Data();
-        data.url = url;
+        HashMap<String, String> data = new HashMap<>();
+        data.put("url", url);
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         db.collection("af_deeplinks")
             .add(data)
@@ -21,8 +16,8 @@ public class Analytics {
     }
 
     public static void sendIDFAData(String url) {
-        Data data = new Data();
-        data.url = url;
+        HashMap<String, String> data = new HashMap<>();
+        data.put("url", url);
         FirebaseFirestore db = FirebaseFirestore.getInstance();
         db.collection("idfa_deeplinks")
             .add(data)
