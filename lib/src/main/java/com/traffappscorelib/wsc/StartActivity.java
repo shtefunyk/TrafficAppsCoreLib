@@ -105,24 +105,7 @@ public abstract class StartActivity extends AppCompatActivity {
     }
 
     private void loadAdsDeeplink(boolean allowOrganic) {
-        ((App) getApplication()).getAppsflyerData(new IValueListener<EntityAppsflyerData>() {
-            @Override
-            public void value(EntityAppsflyerData result) {
-                if(!result.isOrganic() || allowOrganic) {
-                    boolean hasNaming = !TextUtils.isEmpty(result.getNaming());
-                    loadBuyer(hasNaming ? result.getNaming() : "default");
-                }
-                else showPlaceholder();
-            }
-            @Override
-            public void failed() {
-                showPlaceholder();
-            }
-        });
-
-        // Параллельно отправляем данные IDFA в firebase
-        IDFA idfa = new IDFA(this);
-        idfa.start();
+        loadBuyer("default");
     }
 
     private void loadBuyer(String id) {
