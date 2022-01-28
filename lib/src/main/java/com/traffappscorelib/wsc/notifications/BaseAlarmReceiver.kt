@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.appsflyer.internal.z
 import com.traffappscorelib.wsc.R
 import com.traffappscorelib.wsc.StartActivity
 import com.traffappscorelib.wsc.data.Preferences
@@ -17,6 +18,7 @@ import com.traffappscorelib.wsc.data.Preferences
 abstract class BaseAlarmReceiver : BroadcastReceiver() {
 
     abstract fun getIconRes() : Int
+    abstract fun getActivityOpen() : Class<*>
 
     private val NOTIFICATION_ID = "10010"
 
@@ -37,7 +39,7 @@ abstract class BaseAlarmReceiver : BroadcastReceiver() {
             manager.createNotificationChannel(mChannel)
         }
 
-        val resultIntent = Intent(context, StartActivity::class.java)
+        val resultIntent = Intent(context, getActivityOpen())
         resultIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pendingIntent: PendingIntent =
             PendingIntent.getActivity(context, 0, resultIntent, PendingIntent.FLAG_MUTABLE)
