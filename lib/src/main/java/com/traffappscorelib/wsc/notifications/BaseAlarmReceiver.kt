@@ -47,8 +47,6 @@ abstract class BaseAlarmReceiver : BroadcastReceiver() {
         val pendingIntent: PendingIntent =
             PendingIntent.getActivity(context, 0, resultIntent, PendingIntent.FLAG_IMMUTABLE)
 
-
-
         val notificationBuilder = NotificationCompat.Builder(context, NOTIFICATION_ID)
             .setSmallIcon(getSmallIconRes())
             .setColor(ContextCompat.getColor(context, getSmallIconColor()))
