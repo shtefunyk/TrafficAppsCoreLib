@@ -13,7 +13,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import com.onesignal.OneSignal;
 import com.traffappscorelib.wsc.data.EntityAppsflyerData;
-import com.traffappscorelib.wsc.data.IDFA;
 import com.traffappscorelib.wsc.data.LoaderBuyer;
 import com.traffappscorelib.wsc.data.LoaderConfig;
 import com.traffappscorelib.wsc.data.Preferences;
@@ -92,20 +91,25 @@ public abstract class StartActivity extends AppCompatActivity {
         LoaderConfig.prepareConfig(this, new IValueListener<LoaderConfig.Config>() {
             @Override
             public void value(LoaderConfig.Config result) {
-                if(result.multipleUse) loadAdsDeeplink(false);
-                else loadAdsDeeplink(result.allowOrganic);
                 initOneSignal(result.oneSignal);
             }
+            @Override public void failed() {}
+        });
+        loadAdsDeeplink();
+    }
 
+    private void loadAdsDeeplink() {
+        ((App) getApplication()).getAppsflyerData(new IValueListener<EntityAppsflyerData>() {
+            @Override
+            public void value(EntityAppsflyerData result) {
+                boolean hasNaming = !TextUtils.isEmpty(result.getNaming());
+                loadBuyer(hasNaming ? result.getNaming() : "default");
+            }
             @Override
             public void failed() {
                 showPlaceholder();
             }
         });
-    }
-
-    private void loadAdsDeeplink(boolean allowOrganic) {
-        loadBuyer("default");
     }
 
     private void loadBuyer(String id) {

@@ -6,23 +6,26 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.os.Build
+import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.appsflyer.internal.z
 import com.traffappscorelib.wsc.R
-import com.traffappscorelib.wsc.StartActivity
 import com.traffappscorelib.wsc.data.Preferences
 
 abstract class BaseAlarmReceiver : BroadcastReceiver() {
 
-    abstract fun getIconRes() : Int
+    abstract fun getSmallIconRes() : Int
+    abstract fun getSmallIconColor() : Int
+    abstract fun getNotificationLayout(text: String) : RemoteViews
     abstract fun getActivityOpen() : Class<*>
 
     private val NOTIFICATION_ID = "10010"
 
     override fun onReceive(context: Context, intent: Intent) {
+
         val preferences = Preferences(context.getSharedPreferences(
             Preferences.PREFS_NAME,
             Context.MODE_PRIVATE
@@ -42,14 +45,16 @@ abstract class BaseAlarmReceiver : BroadcastReceiver() {
         val resultIntent = Intent(context, getActivityOpen())
         resultIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         val pendingIntent: PendingIntent =
-            PendingIntent.getActivity(context, 0, resultIntent, PendingIntent.FLAG_MUTABLE)
+            PendingIntent.getActivity(context, 0, resultIntent, PendingIntent.FLAG_IMMUTABLE)
+
+
 
         val notificationBuilder = NotificationCompat.Builder(context, NOTIFICATION_ID)
-            .setSmallIcon(getIconRes())
+            .setSmallIcon(getSmallIconRes())
+            .setColor(ContextCompat.getColor(context, getSmallIconColor()))
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(getNotificationLayout(preferences.notificationText))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentTitle(preferences.notificationTitle)
-            .setContentText(preferences.notificationText)
-            .setColor(ContextCompat.getColor(context, R.color.white))
             .setContentIntent(pendingIntent)
 
         with(NotificationManagerCompat.from(context)) {
